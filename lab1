@@ -1,0 +1,102 @@
+#include <Wire.h>
+#include <Adafruit_SSD1306.h>
+#include <Adafruit_BME280.h>
+#include <Adafruit_MPU6050.h>
+#include <Adafruit_GFX.h>
+
+#define SCREEN_WIDTH 128 // OLED display width, in pixels
+#define SCREEN_HEIGHT 64 // OLED display height, in pixels
+#define OLED_RESET    -1 // Reset pin # (or -1 if sharing Arduino reset pin)
+
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+Adafruit_BME280 bme;
+Adafruit_MPU6050 mpu;
+
+const int vibratorPin = A0; // Vibrator connected to A0
+int jumpCount = 0;
+bool isJumping = false;
+
+void setup() {
+  Serial.begin(115200);
+
+  // Initialize the MPU6050
+  if (!mpu.begin()) {
+    Serial.println("Failed to find MPU6050 chip");
+    while (1) delay(10);
+  }
+  mpu.setAccelerometerRange(MPU6050_RANGE_8_G);
+
+  // Initialize the BME280
+  if (!bme.begin(0x76)) {
+    Serial.println("Could not find a valid BME280 sensor, check wiring!");
+    while (1) delay(10);
+  }
+
+  // Initialize the OLED display
+  if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
+    Serial.println(F("SSD1306 allocation failed"));
+    while (1) delay(10);
+  }
+  display.clearDisplay();
+
+  display.setTextSize(1);
+  display.setTextColor(WHITE);
+  display.setCursor(0, 0);
+  display.println("Welcome");
+
+  display.setTextSize(1);
+  display.setTextColor(WHITE);
+  display.setCursor(0, 17);
+  display.print("This is a smart watch");
+  display.display();
+  delay(2000); // Pause for 2 seconds
+
+  // Initialize the vibrator
+  pinMode(vibratorPin, OUTPUT);
+}
+
+void loop() {
+  // Read accelerometer data
+  sensors_event_t a, g, temp;
+  mpu.getEvent(&a, &g, &temp);
+
+  // Detect jumping jack
+  if (a.acceleration.z > 1.5 && !isJumping) { // Threshold for jumping jack detection
+    isJumping = true;
+    jumpCount++;
+    if (jumpCount % 5 == 0) {
+      // Activate vibrator
+      digitalWrite(vibratorPin, HIGH);
+      delay(500); // Vibrate for half a second
+      digitalWrite(vibratorPin, LOW);
+    }
+  } else if (a.acceleration.z < 0.5) {
+    isJumping = false;
+  }
+
+  // Read BME280 data
+  float temperature = bme.readTemperature();
+  float humidity = bme.readHumidity();
+
+  // Display data
+  display.clearDisplay();
+
+  display.setTextSize(1);
+  display.setTextColor(WHITE);
+  display.setCursor(0, 0);
+  display.print("Temp: ");
+  display.print(temperature);
+  display.print(" C");
+  display.setCursor(0, 15);
+  display.print("Humidity: ");
+  display.print(humidity);
+  display.print(" %");
+  display.setCursor(0, 30);
+  display.print("Jump Count: ");
+  display.print(jumpCount);
+  display.setCursor(0, 45);
+  display.print("AccelZ: ");
+  display.print(a.acceleration.z);
+
+  display.display();
+  delay(150); // Delay for stability
